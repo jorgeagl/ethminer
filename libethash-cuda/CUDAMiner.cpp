@@ -17,6 +17,8 @@ along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 /** @file CUDAMiner.cpp
 * @author Gav Wood <i@gavwood.com>
 * @date 2014
+* @author MariusVanDerWijden
+* @date 2017
 *
 * Determines the PoW algorithm.
 */
@@ -113,76 +115,87 @@ void CUDAMiner::report(uint64_t _nonce)
 void CUDAMiner::kickOff()
 {
 	m_hook->reset();
-	startWorking();
+	//startWorking();
+}
+
+bool CUDAMiner::init(const h256& seed)
+{
+	// take local copy of work since it may end up being overwritten by kickOff/pause.
+	try {
+		unsigned device = s_devices[index] > -1 ? s_devices[index] : index;
+
+		cnote << "Initialising miner...";
+		m_minerSeed = seed;
+
+		//delete m_miner;
+		//m_miner = new ethash_cuda_miner;
+		if(!m_miner)
+			m_miner = new ethash_cuda_miner;
+
+		EthashAux::LightType light;
+		light = EthashAux::light(seed);
+		//bytesConstRef dagData = dag->data();
+		bytesConstRef lightData = light->data();
+
+		m_miner->init(light->light, lightData.data(), lightData.size(), 
+			device, (s_dagLoadMode == DAG_LOAD_MODE_SINGLE), &s_dagInHostMemory);
+		s_dagLoadIndex++;
+
+		if (s_dagLoadMode == DAG_LOAD_MODE_SINGLE)
+		{
+			if (s_dagLoadIndex >= s_numInstances && s_dagInHostMemory)
+			{
+				// all devices have loaded DAG, we can free now
+				delete[] s_dagInHostMemory;
+				s_dagInHostMemory = NULL;
+				cout << "Freeing DAG from host" << endl;
+			}
+		}
+		return true;
+	}
+	catch (std::runtime_error const& _e)
+	{
+		delete m_miner;
+		m_miner = nullptr;
+		cwarn << "Error CUDA mining: " << _e.what();
+		return false;
+	}
 }
 
 void CUDAMiner::workLoop()
 {
-	// take local copy of work since it may end up being overwritten by kickOff/pause.
-	try {
-		WorkPackage w = work();
-		if (!w)
-			return;
-
-		cnote << "set work; seed: " << "#" + w.seed.hex().substr(0, 8) + ", target: " << "#" + w.boundary.hex().substr(0, 22);
-		if (!m_miner || m_minerSeed != w.seed)
+	WorkPackage current;
+	current.header = h256{1u};
+	current.seed = h256{1u};
+	try
+	{
+		while(true)
 		{
-			unsigned device = s_devices[index] > -1 ? s_devices[index] : index;
-
-			if (s_dagLoadMode == DAG_LOAD_MODE_SEQUENTIAL)
+			const WorkPackage w = work();
+			
+			if(!m_miner || current.header != w.header || current.seed != w.seed)
 			{
-				while (s_dagLoadIndex < index) {
-					this_thread::sleep_for(chrono::seconds(1));
-				}
-			}
-			else if (s_dagLoadMode == DAG_LOAD_MODE_SINGLE)
-			{
-				if (device != s_dagCreateDevice)
+				if(!w || w.header == h256())
 				{
-					// wait until DAG is created on selected device
-					while (s_dagInHostMemory == NULL) {
-						this_thread::sleep_for(chrono::seconds(1));
-					}
+					cnote << "No work. Pause for 3 s.";
+					std::this_thread::sleep_for(std::chrono::seconds(3));
+					continue;
 				}
-				else
+				
+				cnote << "set work; seed: " << "#" + w.seed.hex().substr(0, 8) + ", target: " << "#" + w.boundary.hex().substr(0, 12);
+				if (!m_miner || current.seed != w.seed)
 				{
-					// reset load index
-					s_dagLoadIndex = 0;
+					if(!init(w.seed))
+						break;
 				}
+				current = w;
 			}
-
-			cnote << "Initialising miner...";
-			m_minerSeed = w.seed;
-
-			delete m_miner;
-			m_miner = new ethash_cuda_miner;
-
-			EthashAux::LightType light;
-			light = EthashAux::light(w.seed);
-			//bytesConstRef dagData = dag->data();
-			bytesConstRef lightData = light->data();
-
-			m_miner->init(light->light, lightData.data(), lightData.size(), device, (s_dagLoadMode == DAG_LOAD_MODE_SINGLE), &s_dagInHostMemory);
-			s_dagLoadIndex++;
-
-			if (s_dagLoadMode == DAG_LOAD_MODE_SINGLE)
-			{
-				if (s_dagLoadIndex >= s_numInstances && s_dagInHostMemory)
-				{
-					// all devices have loaded DAG, we can free now
-					delete[] s_dagInHostMemory;
-					s_dagInHostMemory = NULL;
-
-					cout << "Freeing DAG from host" << endl;
-				}
-			}
+			uint64_t upper64OfBoundary = (uint64_t)(u64)((u256)current.boundary >> 192);
+			uint64_t startN = current.startNonce;
+			if (current.exSizeBits >= 0) 
+				startN = current.startNonce | ((uint64_t)index << (64 - 4 - current.exSizeBits)); // this can support up to 16 devices
+			m_miner->search(current.header.data(), upper64OfBoundary, *m_hook, (current.exSizeBits >= 0), startN);
 		}
-
-		uint64_t upper64OfBoundary = (uint64_t)(u64)((u256)w.boundary >> 192);
-		uint64_t startN = w.startNonce;
-		if (w.exSizeBits >= 0)
-			startN = w.startNonce | ((uint64_t)index << (64 - 4 - w.exSizeBits)); // this can support up to 16 devices
-		m_miner->search(w.header.data(), upper64OfBoundary, *m_hook, (w.exSizeBits >= 0), startN);
 	}
 	catch (std::runtime_error const& _e)
 	{
@@ -195,7 +208,7 @@ void CUDAMiner::workLoop()
 void CUDAMiner::pause()
 {
 	m_hook->abort();
-	stopWorking();
+	//stopWorking();
 }
 
 std::string CUDAMiner::platformInfo()
