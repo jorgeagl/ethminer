@@ -170,8 +170,6 @@ public:
 		farm(_farm)
 	{}
 
-	virtual ~Miner() = default;
-
 	void setWork(WorkPackage const& _work)
 	{
 		{
@@ -179,8 +177,6 @@ public:
 			m_work = _work;
 			workSwitchStart = std::chrono::high_resolution_clock::now();
 		}
-		pause();
-		kickOff();
 		m_hashCount = 0;
 	}
 
@@ -191,18 +187,6 @@ public:
 	virtual HwMonitor hwmon() = 0;
 
 protected:
-
-	/**
-	 * @brief Begin working on a given work package, discarding any previous work.
-	 * @param _work The package for which to find a solution.
-	 */
-	virtual void kickOff() = 0;
-
-	/**
-	 * @brief No work left to be done. Pause until told to kickOff().
-	 */
-	virtual void pause() = 0;
-
 	WorkPackage work() const { Guard l(x_work); return m_work; }
 
 	void addHashCount(uint64_t _n) { m_hashCount += _n; }

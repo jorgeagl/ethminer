@@ -23,10 +23,21 @@ else()
 	)
 endif()
 
-file(GLOB sources "*.cpp" "*.cu")
-file(GLOB headers "*.h" "*.cuh")
+set(
+	sources
+	cuda_helper.h
+	CUDAMiner.cpp CUDAMiner.h
+	dagger_shared.cuh
+	dagger_shuffled.cuh
+	ethash_cuda_miner_kernel.cu
+	ethash_cuda_miner_kernel.h
+	ethash_cuda_miner_kernel_globals.h
+	fnv.cuh
+	keccak.cuh
+	keccak_u64.cuh
+)
 
-cuda_add_library(ethash-cuda STATIC ${sources} ${headers})
+cuda_add_library(ethash-cuda STATIC ${sources})
 target_link_libraries(ethash-cuda ethcore ethash hwmon)
 target_include_directories(ethash-cuda PUBLIC ${CUDA_INCLUDE_DIRS})
 target_include_directories(ethash-cuda PRIVATE .. ${CMAKE_CURRENT_BINARY_DIR})

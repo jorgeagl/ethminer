@@ -93,9 +93,6 @@ public:
 		}
 	}
 	HwMonitor hwmon() override;
-protected:
-	void kickOff() override;
-	void pause() override;
 
 private:
 	void workLoop() override;

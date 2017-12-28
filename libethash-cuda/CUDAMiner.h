@@ -14,38 +14,28 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file CUDAMiner.h
-* @author Gav Wood <i@gavwood.com>
-* @date 2014
-*
-* Determines the PoW algorithm.
-*/
 #pragma once
 
+#include "ethash_cuda_miner_kernel.h"
+#include <libhwmon/wrapnvml.h>
+#include <libethash/ethash.h>
 #include <libdevcore/Worker.h>
 #include <libethcore/EthashAux.h>
 #include <libethcore/Miner.h>
-#include "ethash_cuda_miner.h"
 
 namespace dev
 {
 namespace eth
 {
-class EthashCUDAHook;
-
 	class CUDAMiner: public Miner
 	{
-		friend class dev::eth::EthashCUDAHook;
-
 	public:
 		CUDAMiner(FarmFace& _farm, unsigned _index);
-		~CUDAMiner();
 
 		static unsigned instances() 
 		{ 
-			return s_numInstances > 0 ? s_numInstances : 1; 
+			return s_numInstances > 0 ? s_numInstances : 1;
 		}
-		static std::string platformInfo();
 		static unsigned getNumDevices();
 		static void listDevices();
 		static void setParallelHash(unsigned _parallelHash);
@@ -62,7 +52,7 @@ class EthashCUDAHook;
 		{ 
 			s_numInstances = std::min<unsigned>(_instances, getNumDevices());
 		}
-		static void setDevices(unsigned * _devices, unsigned _selectedDeviceCount) 
+		static void setDevices(const unsigned* _devices, unsigned _selectedDeviceCount)
 		{
 			for (unsigned i = 0; i < _selectedDeviceCount; i++) 
 			{
@@ -70,24 +60,60 @@ class EthashCUDAHook;
 			}
 		}
 		HwMonitor hwmon() override;
-	protected:
-		void kickOff() override;
-		void pause() override;
 	private:
+		bool innerInit(size_t numDevices, ethash_light_t _light, uint8_t const* _lightData, uint64_t _lightSize, unsigned _deviceId, bool _cpyToHost, uint8_t * &hostDAG);
+
 		void workLoop() override;
 		void report(uint64_t _nonce);
-		void initDevice(WorkPackage w);
 
 		bool init(const h256& seed);
 
-		EthashCUDAHook* m_hook = nullptr;
-		ethash_cuda_miner* m_miner = nullptr;
+		void search(uint8_t const* header, uint64_t target, bool _ethStratum, uint64_t _startN);
 
-		h256 m_minerSeed;		///< Last seed in m_miner
-		static unsigned s_platformId;
-		static unsigned s_deviceId;
 		static unsigned s_numInstances;
 		static int s_devices[16];
+
+
+	public:
+		/* -- default values -- */
+		/// Default value of the block size. Also known as workgroup size.
+		static unsigned const c_defaultBlockSize;
+		/// Default value of the grid size
+		static unsigned const c_defaultGridSize;
+		// default number of CUDA streams
+		static unsigned const c_defaultNumStreams;
+
+	private:
+		hash32_t m_current_header;
+		uint64_t m_current_target;
+		uint64_t m_current_nonce;
+		uint64_t m_starting_nonce;
+		uint64_t m_current_index;
+		uint32_t m_sharedBytes;
+
+		///Constants on GPU
+		hash128_t* m_dag = nullptr;
+		std::vector<hash64_t*> m_light;
+		uint32_t m_dag_size = -1;
+		uint32_t m_device_num;
+
+
+
+		volatile uint32_t ** m_search_buf;
+		cudaStream_t  * m_streams;
+
+		/// The local work size for the search
+		static unsigned s_blockSize;
+		/// The initial global work size for the searches
+		static unsigned s_gridSize;
+		/// The number of CUDA streams
+		static unsigned s_numStreams;
+		/// CUDA schedule flag
+		static unsigned s_scheduleFlag;
+
+		static unsigned m_parallelHash;
+
+		wrap_nvml_handle *nvmlh = nullptr;
 
 	};
 }
