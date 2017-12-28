@@ -43,7 +43,7 @@ class EthashCUDAHook;
 
 		static unsigned instances() 
 		{ 
-			return s_numInstances > 0 ? s_numInstances : 1; 
+			return s_numInstances > 0 ? s_numInstances : 1;
 		}
 		static unsigned getNumDevices();
 		static void listDevices();
@@ -69,9 +69,6 @@ class EthashCUDAHook;
 			}
 		}
 		HwMonitor hwmon() override;
-	protected:
-		void kickOff() override;
-		void pause() override;
 	private:
 		void workLoop() override;
 		void report(uint64_t _nonce);

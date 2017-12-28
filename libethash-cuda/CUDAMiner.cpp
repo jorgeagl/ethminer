@@ -72,10 +72,6 @@ void CUDAMiner::report(uint64_t _nonce)
 		farm.submitProof(Solution{_nonce, r.mixHash, w.header, w.seed, w.boundary});
 }
 
-void CUDAMiner::kickOff()
-{
-}
-
 bool CUDAMiner::init(const h256& seed)
 {
 	// take local copy of work since it may end up being overwritten by kickOff/pause.
@@ -156,10 +152,6 @@ void CUDAMiner::workLoop()
 	{
 		cwarn << "Error CUDA mining: " << _e.what();
 	}
-}
-
-void CUDAMiner::pause()
-{
 }
 
 unsigned CUDAMiner::getNumDevices()

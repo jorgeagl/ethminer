@@ -108,9 +108,6 @@ void CLMiner::report(uint64_t _nonce, WorkPackage const& _w)
 		cwarn << "Invalid solution";
 }
 
-void CLMiner::kickOff()
-{}
-
 namespace
 {
 uint64_t randomNonce()
@@ -232,9 +229,6 @@ void CLMiner::workLoop()
 		cwarn << "OpenCL Error:" << _e.what() << _e.err();
 	}
 }
-
-void CLMiner::pause()
-{}
 
 unsigned CLMiner::getNumDevices()
 {
