@@ -319,7 +319,6 @@ cpyDag:
 void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_hook& hook, bool _ethStratum, uint64_t _startN)
 {
 	bool initialize = false;
-	bool exit = false;
 	if (memcmp(&m_current_header, header, sizeof(hash32_t)))
 	{
 		m_current_header = *reinterpret_cast<hash32_t const *>(header);
@@ -362,7 +361,7 @@ void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_ho
 		}
 	}
 	uint64_t batch_size = s_gridSize * s_blockSize;
-	for (; !exit; m_current_index++, m_current_nonce += batch_size)
+	for (;; m_current_index++, m_current_nonce += batch_size)
 	{
 		auto stream_index = m_current_index % s_numStreams;
 		cudaStream_t stream = m_streams[stream_index];
@@ -382,8 +381,9 @@ void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_ho
 		run_ethash_search(s_gridSize, s_blockSize, m_sharedBytes, stream, buffer, m_current_nonce, m_parallelHash);
 		if (m_current_index >= s_numStreams)
 		{
-			exit = found_count && hook.found(nonces);
-			exit |= hook.searched(nonce_base, batch_size);
+			if (found_count)
+				hook.found(nonces);
+			hook.searched(nonce_base, batch_size);
 		}
 	}
 }
