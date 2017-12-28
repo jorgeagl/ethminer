@@ -78,8 +78,6 @@ namespace eth
 	};
 }
 }
-unsigned CUDAMiner::s_platformId = 0;
-unsigned CUDAMiner::s_deviceId = 0;
 unsigned CUDAMiner::s_numInstances = 0;
 int CUDAMiner::s_devices[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
 
@@ -115,7 +113,6 @@ bool CUDAMiner::init(const h256& seed)
 		unsigned device = s_devices[index] > -1 ? s_devices[index] : index;
 
 		cnote << "Initialising miner...";
-		m_minerSeed = seed;
 
 		EthashAux::LightType light;
 		light = EthashAux::light(seed);
