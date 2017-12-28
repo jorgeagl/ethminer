@@ -129,7 +129,8 @@ void CLMiner::workLoop()
 	current.header = h256{1u};
 	current.seed = h256{1u};
 
-	try {
+	try
+	{
 		while (true)
 		{
 			const WorkPackage w = work();

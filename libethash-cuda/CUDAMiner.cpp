@@ -64,6 +64,8 @@ void CUDAMiner::report(uint64_t _nonce)
 	Result r = EthashAux::eval(w.seed, w.header, _nonce);
 	if (r.value < w.boundary)
 		farm.submitProof(Solution{_nonce, r.mixHash, w.header, w.seed, w.boundary});
+	else
+		cwarn << "Invalid solution!";
 }
 
 bool CUDAMiner::init(const h256& seed)
@@ -214,8 +216,20 @@ bool CUDAMiner::innerInit(size_t numDevices, ethash_light_t _light, uint8_t cons
 	}
 }
 
+namespace
+{
+uint64_t randomNonce()
+{
+	static std::mt19937_64 s_gen(std::random_device{}());
+	return std::uniform_int_distribution<uint64_t>{}(s_gen);
+}
+}
+
 void CUDAMiner::workLoop()
 {
+	uint64_t startNonce = 0;
+	uint64_t target = 0;
+
 	// The work package currently processed by GPU.
 	WorkPackage current;
 	current.header = h256{1u};
@@ -223,33 +237,45 @@ void CUDAMiner::workLoop()
 
 	try
 	{
-		while(true)
+		while (true)
 		{
 			const WorkPackage w = work();
 			
-			if (current.header != w.header || current.seed != w.seed)
+			if (current.header != w.header)
 			{
-				if(!w || w.header == h256())
+				// New work received. Update GPU data.
+				auto localSwitchStart = std::chrono::high_resolution_clock::now();
+
+				if (!w)
 				{
-					cnote << "No work. Pause for 3 s.";
+					cudalog << "No work. Pause for 3 s.";
 					std::this_thread::sleep_for(std::chrono::seconds(3));
 					continue;
 				}
-				
-				cnote << "set work; seed: " << "#" + w.seed.hex().substr(0, 8) + ", target: " << "#" + w.boundary.hex().substr(0, 12);
+
+				cudalog << "New work: header" << w.header << "target" << w.boundary.hex();
+
 				if (current.seed != w.seed)
 				{
-					if(!init(w.seed))
-						break;
+					cudalog << "New seed" << w.seed;
+					init(w.seed);
 				}
+
+				// Upper 64 bits of the boundary.
+				target = (uint64_t)(u64)((u256)w.boundary >> 192);
+				assert(target > 0);
+
+				// FIXME: This logic should be move out of here.
+				if (w.exSizeBits >= 0)
+					startNonce = w.startNonce | ((uint64_t)index << (64 - 4 - w.exSizeBits)); // This can support up to 16 devices.
+				else
+					startNonce = randomNonce();
+
 				current = w;
 			}
-			uint64_t upper64OfBoundary = (uint64_t)(u64)((u256)current.boundary >> 192);
-			uint64_t startN = current.startNonce;
-			if (current.exSizeBits >= 0) 
-				startN = current.startNonce | ((uint64_t)index << (64 - 4 - current.exSizeBits)); // this can support up to 16 devices
-			search(current.header.data(), upper64OfBoundary, (current.exSizeBits >= 0), startN);
-			
+
+			search(current.header.data(), target, (current.exSizeBits >= 0), startNonce);
+
 			// Check if we should stop.
 			if (shouldStop())
 			{
@@ -331,6 +357,7 @@ void CUDAMiner::search(uint8_t const* header, uint64_t target, bool _ethStratum,
 			if (found_count)
 				report(nonces[0]);
 			addHashCount(batch_size);
+			break;
 		}
 	}
 }
