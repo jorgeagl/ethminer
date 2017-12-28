@@ -17,8 +17,6 @@ along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 /** @file CUDAMiner.cpp
 * @author Gav Wood <i@gavwood.com>
 * @date 2014
-* @author MariusVanDerWijden
-* @date 2017
 *
 * Determines the PoW algorithm.
 */
@@ -62,7 +60,7 @@ namespace eth
 		}
 
 	protected:
-		virtual bool found(uint64_t const* _nonces, uint32_t _count) override
+		virtual bool found(uint64_t const* _nonces) override
 		{
 			m_owner.report(_nonces[0]);
 			return m_owner.shouldStop();
@@ -115,7 +113,6 @@ void CUDAMiner::report(uint64_t _nonce)
 void CUDAMiner::kickOff()
 {
 	m_hook->reset();
-	//startWorking();
 }
 
 bool CUDAMiner::init(const h256& seed)
@@ -127,20 +124,17 @@ bool CUDAMiner::init(const h256& seed)
 		cnote << "Initialising miner...";
 		m_minerSeed = seed;
 
-		//delete m_miner;
-		//m_miner = new ethash_cuda_miner;
 		if(!m_miner)
 			m_miner = new ethash_cuda_miner;
 
 		EthashAux::LightType light;
 		light = EthashAux::light(seed);
-		//bytesConstRef dagData = dag->data();
 		bytesConstRef lightData = light->data();
 
 		m_miner->init(light->light, lightData.data(), lightData.size(), 
-			device, (s_dagLoadMode == DAG_LOAD_MODE_SINGLE), &s_dagInHostMemory);
+			device, (s_dagLoadMode == DAG_LOAD_MODE_SINGLE), s_dagInHostMemory);
 		s_dagLoadIndex++;
-
+    
 		if (s_dagLoadMode == DAG_LOAD_MODE_SINGLE)
 		{
 			if (s_dagLoadIndex >= s_numInstances && s_dagInHostMemory)
@@ -182,7 +176,7 @@ void CUDAMiner::workLoop()
 					continue;
 				}
 				
-				cnote << "set work; seed: " << "#" + w.seed.hex().substr(0, 8) + ", target: " << "#" + w.boundary.hex().substr(0, 12);
+				//cnote << "set work; seed: " << "#" + w.seed.hex().substr(0, 8) + ", target: " << "#" + w.boundary.hex().substr(0, 12);
 				if (!m_miner || current.seed != w.seed)
 				{
 					if(!init(w.seed))
@@ -195,6 +189,12 @@ void CUDAMiner::workLoop()
 			if (current.exSizeBits >= 0) 
 				startN = current.startNonce | ((uint64_t)index << (64 - 4 - current.exSizeBits)); // this can support up to 16 devices
 			m_miner->search(current.header.data(), upper64OfBoundary, *m_hook, (current.exSizeBits >= 0), startN);
+			
+			// Check if we should stop.
+			if (shouldStop())
+			{
+				break;
+			}
 		}
 	}
 	catch (std::runtime_error const& _e)
@@ -208,7 +208,6 @@ void CUDAMiner::workLoop()
 void CUDAMiner::pause()
 {
 	m_hook->abort();
-	//stopWorking();
 }
 
 std::string CUDAMiner::platformInfo()

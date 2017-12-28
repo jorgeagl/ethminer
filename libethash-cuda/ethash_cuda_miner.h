@@ -17,12 +17,13 @@ public:
 		virtual ~search_hook(); // always a virtual destructor for a class with virtuals.
 
 		// reports progress, return true to abort
-		virtual bool found(uint64_t const* nonces, uint32_t count) = 0;
+		virtual bool found(uint64_t const* nonces) = 0;
 		virtual bool searched(uint64_t start_nonce, uint32_t count) = 0;
 	};
 
 public:
 	ethash_cuda_miner();
+	~ethash_cuda_miner();
 
 	static std::string platform_info(unsigned _deviceId = 0);
 	static int getNumDevices();
@@ -37,7 +38,7 @@ public:
 		);
         static void setParallelHash(unsigned _parallelHash);
 
-	bool init(ethash_light_t _light, uint8_t const* _lightData, uint64_t _lightSize, unsigned _deviceId, bool _cpyToHost, volatile void** hostDAG);
+	bool init(ethash_light_t _light, uint8_t const* _lightData, uint64_t _lightSize, unsigned _deviceId, bool _cpyToHost, uint8_t * &hostDAG);
 
 	void finish();
 	void search(uint8_t const* header, uint64_t target, search_hook& hook, bool _ethStratum, uint64_t _startN);
@@ -60,9 +61,9 @@ private:
 	uint32_t m_sharedBytes;
 	
 	///Constants on GPU
-	hash128_t* m_dag;
-	hash64_t ** m_light;
-	uint32_t m_dag_size;
+	hash128_t* m_dag = nullptr;
+	hash64_t ** m_light = nullptr;
+	uint32_t m_dag_size = -1;
 	int m_device_num;
 	
 	

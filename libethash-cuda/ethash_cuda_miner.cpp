@@ -17,8 +17,6 @@
 /** @file ethash_cuda_miner.cpp
 * @author Genoil <jw@meneer.net>
 * @date 2015
-* @author MariusVanDerWijden
-* @date 2017
 */
 
 
@@ -29,7 +27,6 @@
 #include <iostream>
 #include <queue>
 #include <random>
-#include <atomic>
 #include <sstream>
 #include <chrono>
 #include <thread>
@@ -70,7 +67,11 @@ ethash_cuda_miner::ethash_cuda_miner()
 	m_light = new hash64_t*[devicesCount];
 	for(int i = 0; i < devicesCount; i++)
 		m_light[i] = nullptr;
-	m_dag = nullptr;
+}
+
+ethash_cuda_miner::~ethash_cuda_miner()
+{
+	delete[] m_light;
 }
 
 std::string ethash_cuda_miner::platform_info(unsigned _deviceId)
@@ -208,7 +209,7 @@ void ethash_cuda_miner::finish()
 	CUDA_SAFE_CALL(cudaDeviceReset());
 }
 
-bool ethash_cuda_miner::init(ethash_light_t _light, uint8_t const* _lightData, uint64_t _lightSize, unsigned _deviceId, bool _cpyToHost, volatile void** hostDAG)
+bool ethash_cuda_miner::init(ethash_light_t _light, uint8_t const* _lightData, uint64_t _lightSize, unsigned _deviceId, bool _cpyToHost, uint8_t* &hostDAG)
 {
 	try
 	{
@@ -233,20 +234,25 @@ bool ethash_cuda_miner::init(ethash_light_t _light, uint8_t const* _lightData, u
 		uint32_t dagSize128   = (unsigned)(dagSize / ETHASH_MIX_BYTES);
 		uint32_t lightSize64 = (unsigned)(_lightSize / sizeof(node));
 
-		// create buffer for cache
-		hash64_t * light = m_light[device_num];
-		hash128_t * dag = m_dag;
+		
 		
 		CUDA_SAFE_CALL(cudaSetDevice(device_num));
 		cudalog << "Set Device to current";
-		if(dagSize128 != m_dag_size || !dag)
+		if(dagSize128 != m_dag_size || !m_dag)
 		{
 			//We need to reset the device and recreate the dag  
 			cudalog << "Resetting device";
 			CUDA_SAFE_CALL(cudaDeviceReset());
 			CUDA_SAFE_CALL(cudaSetDeviceFlags(s_scheduleFlag));
 			CUDA_SAFE_CALL(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
+			//We need to reset the light and the Dag for the following code to reallocate
+			//since cudaDeviceReset() free's all previous allocated memory
+			m_light[device_num] = nullptr;
+			m_dag = nullptr; 
 		}
+		// create buffer for cache
+		hash128_t * dag = m_dag;
+		hash64_t * light = m_light[device_num];
 
 		if(!light){ 
 			cudalog << "Allocating light with size: " << _lightSize;
@@ -264,7 +270,7 @@ bool ethash_cuda_miner::init(ethash_light_t _light, uint8_t const* _lightData, u
 		if(dagSize128 != m_dag_size || !dag)
 		{
 			// create mining buffers
-			cudalog << "Generating mining buffers";
+			cudalog << "Generating mining buffers"; //TODO whats up with this?
 			for (unsigned i = 0; i != s_numStreams; ++i)
 			{
 				CUDA_SAFE_CALL(cudaMallocHost(&m_search_buf[i], SEARCH_RESULT_BUFFER_SIZE * sizeof(uint32_t)));
@@ -278,7 +284,7 @@ bool ethash_cuda_miner::init(ethash_light_t _light, uint8_t const* _lightData, u
 
 			m_sharedBytes = device_props.major * 100 < SHUFFLE_MIN_VER ? (64 * s_blockSize) / 8 : 0 ;
 
-			if (!*hostDAG)
+			if (!hostDAG)
 			{
 				if(device_num == 0 || !_cpyToHost){ //if !cpyToHost -> All devices shall generate their DAG
 					cudalog << "Generating DAG for GPU #" << device_num << " with dagSize: " 
@@ -291,10 +297,10 @@ bool ethash_cuda_miner::init(ethash_light_t _light, uint8_t const* _lightData, u
 						cudalog << "Copying DAG from GPU #" << device_num << " to host";
 						CUDA_SAFE_CALL(cudaMemcpy(reinterpret_cast<void*>(memoryDAG), dag, dagSize, cudaMemcpyDeviceToHost));
 
-						*hostDAG = (void*)memoryDAG;
+						hostDAG = memoryDAG;
 					}
 				}else{
-					while(!*hostDAG)
+					while(!hostDAG)
 						this_thread::sleep_for(chrono::milliseconds(100)); 
 					goto cpyDag;
 				}
@@ -303,13 +309,11 @@ bool ethash_cuda_miner::init(ethash_light_t _light, uint8_t const* _lightData, u
 			{
 cpyDag:
 				cudalog << "Copying DAG from host to GPU #" << device_num;
-				const void* hdag = (const void*)(*hostDAG);
+				const void* hdag = (const void*)hostDAG;
 				CUDA_SAFE_CALL(cudaMemcpy(reinterpret_cast<void*>(dag), hdag, dagSize, cudaMemcpyHostToDevice));
 			}
-		}else
-		{
-			//We only need to reset the light 
 		}
+    
 		m_dag = dag;
 		m_dag_size = dagSize128;
 		return true;
@@ -386,7 +390,7 @@ void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_ho
 		run_ethash_search(s_gridSize, s_blockSize, m_sharedBytes, stream, buffer, m_current_nonce, m_parallelHash);
 		if (m_current_index >= s_numStreams)
 		{
-			exit = found_count && hook.found(nonces, found_count);
+			exit = found_count && hook.found(nonces);
 			exit |= hook.searched(nonce_base, batch_size);
 		}
 	}
