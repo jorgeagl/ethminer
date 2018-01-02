@@ -57,6 +57,17 @@ CUDAMiner::CUDAMiner(FarmFace& _farm, unsigned _index) :
 	m_light(getNumDevices())
 {}
 
+<<<<<<< HEAD
+=======
+CUDAMiner::~CUDAMiner()
+{
+	stopWorking();
+	pause();
+	delete m_miner;
+	delete m_hook;
+}
+
+>>>>>>> muraj/master
 void CUDAMiner::report(uint64_t _nonce)
 {
 	// FIXME: This code is exactly the same as in EthashGPUMiner.
@@ -273,8 +284,16 @@ void CUDAMiner::workLoop()
 
 				current = w;
 			}
+<<<<<<< HEAD
 
 			search(current.header.data(), target, (current.exSizeBits >= 0), startNonce);
+=======
+			uint64_t upper64OfBoundary = (uint64_t)(u64)((u256)current.boundary >> 192);
+			uint64_t startN = current.startNonce;
+			if (current.exSizeBits >= 0) 
+				startN = current.startNonce | ((uint64_t)index << (64 - 4 - current.exSizeBits)); // this can support up to 16 devices
+			m_miner->search(current.header.data(), upper64OfBoundary, *m_hook, (current.exSizeBits >= 0), startN);
+>>>>>>> muraj/master
 
 			// Check if we should stop.
 			if (shouldStop())
