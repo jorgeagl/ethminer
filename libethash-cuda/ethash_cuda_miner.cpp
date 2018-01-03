@@ -301,8 +301,10 @@ void ethash_cuda_miner::search(uint8_t const* header, uint64_t target, search_ho
 		run_ethash_search(s_gridSize, s_blockSize, m_sharedBytes, stream, buffer, m_current_nonce, m_parallelHash);
 		if (m_current_index >= s_numStreams)
 		{
-			exit = found_count && hook.found(nonces);
-			exit |= hook.searched(nonce_base, batch_size);
+			if (found_count)
+				hook.found(nonces);
+			hook.searched(batch_size);
+			exit = hook.shouldStop();
 		}
 	}
 }

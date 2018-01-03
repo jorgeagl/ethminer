@@ -54,17 +54,18 @@ namespace eth
 		}
 
 	protected:
-		virtual bool found(uint64_t const* _nonces) override
+		void found(uint64_t const* _nonces) override
 		{
 			m_owner.report(_nonces[0]);
-			return m_owner.shouldStop();
 		}
 
-		virtual bool searched(uint64_t _startNonce, uint32_t _count) override
+		void searched(uint32_t _count) override
 		{
-			(void) _startNonce;  // FIXME: unusued arg.
-			UniqueGuard l(x_all);
 			m_owner.addHashCount(_count);
+		}
+
+		bool shouldStop() override
+		{
 			if (m_abort || m_owner.shouldStop())
 				return (m_aborted = true);
 			return false;
