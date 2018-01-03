@@ -472,6 +472,8 @@ public:
 				BOOST_THROW_EXCEPTION(BadArgument());
 			}
 		}
+		else if (arg == "--check-results")
+			m_checkResults = true;
 		else
 			return false;
 		return true;
@@ -578,6 +580,7 @@ public:
 			<< "    -HWMON Displays gpu temp and fan percent." << endl
 			<< "    -SE, --stratum-email <s> Email address used in eth-proxy (optional)" << endl
 			<< "    --farm-recheck <n>  Leave n ms between checks for changed work (default: 500). When using stratum, use a high value (i.e. 2000) to get more stable hashrate output" << endl
+			<< "    --check-results Double check GPU results. This will delay share submission." << endl
 #endif
 			<< endl
 			<< "Benchmarking mode:" << endl
@@ -606,9 +609,9 @@ public:
 			<< "    --cl-parallel-hash <1 2 ..8> Define how many threads to associate per hash. Default=8" << endl
 #endif
 #if ETH_ETHASHCUDA
-			<< "    --cuda-block-size Set the CUDA block work size. Default is " << toString(ethash_cuda_miner::c_defaultBlockSize) << endl
-			<< "    --cuda-grid-size Set the CUDA grid size. Default is " << toString(ethash_cuda_miner::c_defaultGridSize) << endl
-			<< "    --cuda-streams Set the number of CUDA streams. Default is " << toString(ethash_cuda_miner::c_defaultNumStreams) << endl
+			<< "    --cuda-block-size Set the CUDA block work size. Default is " << toString(CUDAMiner::c_defaultBlockSize) << endl
+			<< "    --cuda-grid-size Set the CUDA grid size. Default is " << toString(CUDAMiner::c_defaultGridSize) << endl
+			<< "    --cuda-streams Set the number of CUDA streams. Default is " << toString(CUDAMiner::c_defaultNumStreams) << endl
 			<< "    --cuda-schedule <mode> Set the schedule mode for CUDA threads waiting for CUDA devices to finish work. Default is 'sync'. Possible values are:" << endl
 			<< "        auto  - Uses a heuristic based on the number of active CUDA contexts in the process C and the number of logical processors in the system P. If C > P, then yield else spin." << endl
 			<< "        spin  - Instruct CUDA to actively spin when waiting for results from the device." << endl
@@ -789,7 +792,7 @@ private:
 		Farm f;
 		
 #if API_CORE
-		Api api(this->m_api_port, f);
+		Api api(this->m_api_port, f, this->m_farmURL, this->m_port);
 #endif
 		
 		f.setSealers(sealers);
@@ -935,12 +938,12 @@ private:
 		Farm f;
 		
 #if API_CORE
-		Api api(this->m_api_port, f);
+		Api api(this->m_api_port, f, this->m_farmURL, this->m_port);
 #endif
 	
 		// this is very ugly, but if Stratum Client V2 tunrs out to be a success, V1 will be completely removed anyway
 		if (m_stratumClientVersion == 1) {
-			EthStratumClient client(&f, m_minerType, m_farmURL, m_port, m_user, m_pass, m_maxFarmRetries, m_worktimeout, m_stratumProtocol, m_email);
+			EthStratumClient client(&f, m_minerType, m_farmURL, m_port, m_user, m_pass, m_maxFarmRetries, m_worktimeout, m_stratumProtocol, m_email, m_checkResults);
 			if (m_farmFailOverURL != "")
 			{
 				if (m_fuser != "")
@@ -994,7 +997,7 @@ private:
 			}
 		}
 		else if (m_stratumClientVersion == 2) {
-			EthStratumClientV2 client(&f, m_minerType, m_farmURL, m_port, m_user, m_pass, m_maxFarmRetries, m_worktimeout, m_stratumProtocol, m_email);
+			EthStratumClientV2 client(&f, m_minerType, m_farmURL, m_port, m_user, m_pass, m_maxFarmRetries, m_worktimeout, m_stratumProtocol, m_email, m_checkResults);
 			if (m_farmFailOverURL != "")
 			{
 				if (m_fuser != "")
@@ -1065,11 +1068,11 @@ private:
 #endif
 #endif
 #if ETH_ETHASHCUDA
-	unsigned m_globalWorkSizeMultiplier = ethash_cuda_miner::c_defaultGridSize;
-	unsigned m_localWorkSize = ethash_cuda_miner::c_defaultBlockSize;
+	unsigned m_globalWorkSizeMultiplier = CUDAMiner::c_defaultGridSize;
+	unsigned m_localWorkSize = CUDAMiner::c_defaultBlockSize;
 	unsigned m_cudaDeviceCount = 0;
 	unsigned m_cudaDevices[16];
-	unsigned m_numStreams = ethash_cuda_miner::c_defaultNumStreams;
+	unsigned m_numStreams = CUDAMiner::c_defaultNumStreams;
 	unsigned m_cudaSchedule = 4; // sync
 #endif
 	unsigned m_dagLoadMode = 0; // parallel
@@ -1107,6 +1110,7 @@ private:
 	string m_fuser = "";
 	string m_fpass = "";
 	string m_email = "";
+	bool m_checkResults = false; // double check
 #endif
 	string m_fport = "";
 

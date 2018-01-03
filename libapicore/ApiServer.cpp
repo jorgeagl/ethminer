@@ -10,12 +10,19 @@ ApiServer::ApiServer(AbstractServerConnector *conn, serverVersion_t type, Farm &
 	}
 }
 
+void ApiServer::SetPool(const string pool)
+{
+       this->pool = pool;
+}
+
 void ApiServer::getMinerStat1(const Json::Value& request, Json::Value& response)
 {
 	(void) request; // unused
 	
 	auto runningTime = std::chrono::duration_cast<std::chrono::minutes>(steady_clock::now() - this->m_farm.farmLaunched());
-	
+
+	string pool = this->pool;
+ 
 	SolutionStats s = this->m_farm.getSolutionStats();
 	WorkingProgress p = this->m_farm.miningProgress(true);
 	
@@ -55,7 +62,7 @@ void ApiServer::getMinerStat1(const Json::Value& request, Json::Value& response)
 	response[4] = totalMhDcr.str();              // total DCR hashrate in MH/s, number of DCR shares, number of DCR rejected shares.
 	response[5] = detailedMhDcr.str();           // detailed DCR hashrate for all GPUs.
 	response[6] = tempAndFans.str();             // Temperature and Fan speed(%) pairs for all GPUs.
-	response[7] = "";                            // current mining pool. For dual mode, there will be two pools here.
+        response[7] = pool;                          // current mining pool. For dual mode, there will be two pools here.
 	response[8] = invalidStats.str();            // number of ETH invalid shares, number of ETH pool switches, number of DCR invalid shares, number of DCR pool switches.
 }
 
